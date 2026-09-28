@@ -1706,6 +1706,29 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [onSessionForked]);
 
+  // Fork at an entry INCLUDING it (assistant "新会话" button): the new session ends at the clicked reply.
+  // fork_branch is non-destructive (no session-wrapper replacement), so it is allowed while the
+  // source session is running — the branch is a snapshot up to the clicked entry.
+  const handleForkBranch = useCallback(async (entryId: string) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    setForkingEntryId(entryId);
+    try {
+      const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(sid, {
+        type: "fork_branch",
+        entryId,
+      });
+      const { cancelled, newSessionId } = result ?? {};
+      if (!cancelled && newSessionId) {
+        onSessionForked?.(newSessionId);
+      }
+    } catch (e) {
+      console.error("Fork failed:", e);
+    } finally {
+      setForkingEntryId(null);
+    }
+  }, [onSessionForked]);
+
   const handleNavigate = useCallback(async (entryId: string): Promise<boolean> => {
     if (bashRunningRef.current) return false;
     const sid = sessionIdRef.current;
@@ -2448,7 +2471,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
-    handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleFork, handleForkBranch, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,

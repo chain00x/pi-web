@@ -767,9 +767,10 @@ export class AgentSessionWrapper {
       }
 
       case "fork_branch": {
-        if (this.isSessionRunningForReplacement()) {
-          throw new Error("Cannot fork while the session is running");
-        }
+        // No running-guard here: fork_branch never replaces the session wrapper —
+        // it opens a read-only SessionManager snapshot and writes a new file.
+        // Branching while the source session is running is safe and supported
+        // (assistant "新会话" button must work mid-run).
         const entryId = command.entryId as string;
         const sessionManager = this.inner.sessionManager;
         const currentSessionFile = this.inner.sessionFile;

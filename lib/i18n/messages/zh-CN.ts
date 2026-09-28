@@ -268,6 +268,8 @@ export const zhCNLocale: LocalePlugin = {
     "sidebar.newSessionActivity": "会话有新活动",
     "sidebar.deleteSession": "删除 {title}？",
     "sidebar.rename": "重命名",
+    "sidebar.pin": "置顶",
+    "sidebar.unpin": "取消置顶",
     "sidebar.delete": "删除",
     "sidebar.deleteWithShiftClick": "删除（按住 Shift 点击可跳过确认）",
     "sidebar.expandSubagents": "展开子智能体",

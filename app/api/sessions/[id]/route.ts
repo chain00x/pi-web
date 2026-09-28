@@ -24,6 +24,7 @@ import { computeSessionRevision } from "@/lib/session-revision";
 import type { SessionEntry } from "@/lib/types";
 import { readSubagentRun, readSubagentSessionResources, SUBAGENT_META_TYPE } from "@/lib/subagents";
 import { readSessionToolSelection } from "@/lib/session-tool-selection";
+import { clearSessionPin, setSessionPinned } from "@/lib/session-pins";
 import { jsonResponse } from "@/lib/json-response";
 
 export async function GET(
@@ -169,26 +170,33 @@ export async function GET(
   }
 }
 
-// PATCH /api/sessions/[id]  body: { name: string }
+// PATCH /api/sessions/[id]  body: { name?: string, pinned?: boolean }
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   try {
-    const { name } = await req.json() as { name?: string };
-    if (typeof name !== "string") {
-      return NextResponse.json({ error: "name is required" }, { status: 400 });
+    const body = await req.json() as { name?: unknown; pinned?: unknown };
+    const hasName = typeof body.name === "string";
+    const hasPinned = typeof body.pinned === "boolean";
+    if (!hasName && !hasPinned) {
+      return NextResponse.json({ error: "name (string) or pinned (boolean) is required" }, { status: 400 });
     }
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // PATCH writes via appendSessionInfo — open fresh, bypassing the cache.
-    const sm = openSessionManager(filePath, { mutable: true });
-    sm.appendSessionInfo(name.trim());
-    invalidateSessionManagerCache(filePath);
+    if (hasPinned) {
+      setSessionPinned(id, body.pinned as boolean);
+    }
+    if (hasName) {
+      // PATCH writes via appendSessionInfo — open fresh, bypassing the cache.
+      const sm = openSessionManager(filePath, { mutable: true });
+      sm.appendSessionInfo((body.name as string).trim());
+      invalidateSessionManagerCache(filePath);
+    }
     invalidateSessionListCache();
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -352,6 +360,7 @@ export async function DELETE(
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
+      clearSessionPin(deletedId);
       invalidateSessionPathCache(deletedId);
       invalidateSessionManagerCache(deletedPath);
     }

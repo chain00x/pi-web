@@ -192,6 +192,7 @@ interface Props {
   entryId?: string;
   searchBlock?: AssistantContentBlock;
   onFork?: (entryId: string) => void;
+  onForkBranch?: (entryId: string) => void;
   forking?: boolean;
   onNavigate?: (entryId: string) => Promise<boolean>;
   onEditContent?: (message: UserMessage) => void;
@@ -272,12 +273,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, onForkBranch, forking, onNavigate, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} onFork={onForkBranch ?? onFork} forking={forking} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -304,6 +305,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.entryId === next.entryId
     && prev.searchBlock === next.searchBlock
     && prev.onFork === next.onFork
+    && prev.onForkBranch === next.onForkBranch
     && prev.forking === next.forking
     && prev.onNavigate === next.onNavigate
     && prev.onEditContent === next.onEditContent
@@ -609,6 +611,8 @@ function AssistantMessageView({
   entryId,
   searchBlock,
   writtenFiles,
+  onFork,
+  forking,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -623,6 +627,8 @@ function AssistantMessageView({
   entryId?: string;
   searchBlock?: AssistantContentBlock;
   writtenFiles?: WrittenFile[];
+  onFork?: (entryId: string) => void;
+  forking?: boolean;
 }) {
   const { t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
@@ -861,6 +867,39 @@ function AssistantMessageView({
             {formatUsage(message.usage)}
           </div>
         )}
+        {(() => {
+          const canFork = !!entryId && !!onFork;
+          if (!canFork || isStreaming) return null;
+          return (
+            <button
+              onClick={() => { onFork!(entryId!); }}
+              disabled={forking}
+               title={forking ? t("i18n.creatingSession") : t("i18n.newSessionTitle")}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                padding: "3px 8px", height: 22,
+                background: "none", border: "none",
+                borderRadius: 5,
+                color: forking ? "var(--accent)" : "var(--text-dim)",
+                cursor: forking ? "not-allowed" : "pointer",
+                fontSize: 11, fontWeight: 400,
+                whiteSpace: "nowrap",
+                opacity: (hovered || forking) ? 1 : 0,
+                pointerEvents: (hovered || forking) ? "auto" : "none",
+                transition: "opacity 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => { if (!forking) e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { if (!forking) e.currentTarget.style.color = "var(--text-dim)"; }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="6" y1="3" x2="6" y2="15" />
+                <circle cx="18" cy="6" r="3" />
+                <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+              </svg>
+               {forking ? t("i18n.creating") : t("i18n.newSession")}
+            </button>
+          );
+        })()}
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}

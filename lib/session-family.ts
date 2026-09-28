@@ -65,7 +65,11 @@ export function listSessionFamilies(sessions: readonly SessionInfo[]): SessionFa
     if (session.modified > family.latestModified) family.latestModified = session.modified;
   }
 
-  return [...families.values()].sort((a, b) => b.latestModified.localeCompare(a.latestModified));
+  // Pinned families float to the top (relative order still by recency).
+  const pinOf = (family: SessionFamily) => (family.root.pinned ? 1 : 0);
+  return [...families.values()].sort((a, b) =>
+    (pinOf(b) - pinOf(a)) || b.latestModified.localeCompare(a.latestModified)
+  );
 }
 
 export function getSessionFamily(

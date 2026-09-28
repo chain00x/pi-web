@@ -13,6 +13,7 @@ import {
   getRunningRpcSessionIds,
 } from "@/lib/rpc-manager";
 import { startServerPerf } from "@/lib/perf";
+import { readSessionPins } from "@/lib/session-pins";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,11 @@ export async function GET(req: Request) {
     ]);
     perf?.span("scan+projects");
     const sessions = mergeSessionLists(persistedSessions, runtimeSessions);
+    let pins: Set<string> | null = null;
+    for (const session of sessions) {
+      pins ??= readSessionPins();
+      if (pins.has(session.id)) session.pinned = true;
+    }
     return perf?.attach(jsonResponse(
       req,
       {
