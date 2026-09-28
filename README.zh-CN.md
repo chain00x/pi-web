@@ -19,6 +19,35 @@
 - **网页配置**：无需离开 Pi Web，即可管理 Provider 登录和 API Key、模型、模型测试、插件包及技能。
 - **英文、简体中文和繁体中文界面**：Pi Web 首次打开时跟随浏览器语言，也可从顶部栏切换语言。
 
+## 本地自定义功能（本 fork）
+
+本 fork 在上游基础上增加了以下功能：
+
+- **assistant 回复也有「新会话」按钮，运行中可用。** assistant 消息 hover 会出现 fork 按钮，走 `fork_branch`（非破坏性快照 fork：新会话截止到被点击的那条回复，源会话继续运行不受影响），并移除了服务端「运行中禁止 fork」的硬闸。用户消息上的原版「新会话」（会替换当前会话）仍仅在空闲时可用，与上游一致。
+- **会话置顶。** 侧边栏会话 hover 出现图钉按钮；置顶的会话排在所有会话之前（置顶组内按时间倒序），标题旁常驻小钉图标。置顶数据保存在服务端 `~/.pi/agent/session-pins.json`，跨浏览器生效。界面文案支持英文 / 简体中文 / 繁體中文。
+- **排队消息「立即发送」。** 已排队消息栏新增「立即发送」按钮：打断当前运行，等待 agent 停止后，把所有排队内容合并为一条新 prompt 立即发出（排队中的图片无法恢复——pi 只排队文本）。
+
+全部检查通过：`tsc --noEmit`、`eslint`、1307 个单元测试。
+
+### 从源码构建部署
+
+```bash
+npm install
+npm run build          # 即 `next build --webpack`；开发服务器运行时不要执行构建
+```
+
+把生产构建部署到全局安装目录（npm 全局根目录按需调整，例如 `/usr/local/lib/node_modules`）：
+
+```bash
+# 先停掉正在运行的 pi-web（Ctrl+C 或 kill 掉监听 30141 的进程）
+rm -rf /usr/local/lib/node_modules/@agegr/pi-web/.next
+cp -R .next /usr/local/lib/node_modules/@agegr/pi-web/.next
+cp -R public /usr/local/lib/node_modules/@agegr/pi-web/public   # 若静态资源有变动
+nohup node /usr/local/lib/node_modules/@agegr/pi-web/bin/pi-web.js >> /tmp/piweb-prod.log 2>&1 &
+```
+
+服务监听 `http://127.0.0.1:30141`。可用 `cat .../pi-web/.next/BUILD_ID` 校验部署版本与本地 `.next/BUILD_ID` 一致。
+
 ## 快速开始
 
 Pi Web 要求 Node.js 22.19.0 或更高版本。先用 `node --version` 检查版本，然后运行：

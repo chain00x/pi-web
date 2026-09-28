@@ -17,6 +17,35 @@ Local browser UI for the [pi coding agent](https://github.com/earendil-works/pi)
 - **Web-based configuration**: manage provider login and API keys, models, model tests, plugin packages, and skills without leaving Pi Web.
 - **English, Simplified Chinese, and Traditional Chinese UI**: Pi Web follows the browser language initially and provides a language switcher in the top bar.
 
+## Local customizations (this fork)
+
+This fork carries a few changes on top of upstream:
+
+- **"New session" button on assistant replies — works even mid-run.** Assistant messages now have a hover fork button that forks via `fork_branch` (a non-destructive snapshot fork: the new session ends at the clicked reply, the source session keeps running untouched). The server-side "cannot fork while running" guard on `fork_branch` was removed. The original fork on user messages (which replaces the current session) remains idle-only, as upstream.
+- **Session pin-to-top.** Hover a conversation in the sidebar and use the pin button; pinned sessions sort above all others (recency within the pinned group) and show a small pin glyph. Pins are stored server-side in `~/.pi/agent/session-pins.json`, so they persist across browsers. UI strings in English / 简体中文 / 繁體中文.
+- **Send queued messages now (立即发送).** The queued-messages bar gets a "Send now" button: it interrupts the current run, waits for the agent to settle, and resubmits all queued texts as one fresh prompt (queued images cannot be recovered — pi queues text only).
+
+All checks pass: `tsc --noEmit`, `eslint`, 1307 unit tests.
+
+### Build & deploy this fork
+
+```bash
+npm install
+npm run build          # runs `next build --webpack`; never run it while `npm run dev` is active
+```
+
+Deploy the production build to a global install (adjust the path to your npm global root, e.g. `/usr/local/lib/node_modules`):
+
+```bash
+# stop the running pi-web first (Ctrl+C or kill the process listening on 30141)
+rm -rf /usr/local/lib/node_modules/@agegr/pi-web/.next
+cp -R .next /usr/local/lib/node_modules/@agegr/pi-web/.next
+cp -R public /usr/local/lib/node_modules/@agegr/pi-web/public   # if public assets changed
+nohup node /usr/local/lib/node_modules/@agegr/pi-web/bin/pi-web.js >> /tmp/piweb-prod.log 2>&1 &
+```
+
+The server listens on `http://127.0.0.1:30141`. Verify the deployed build with `cat .../pi-web/.next/BUILD_ID` (it must match the local `.next/BUILD_ID`).
+
 ## Quick Start
 
 Pi Web requires Node.js 22.19.0 or newer. Check your version with `node --version`, then run:

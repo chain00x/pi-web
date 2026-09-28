@@ -2082,6 +2082,39 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [opts.chatInputRef, addNotice]);
 
+  // Force-send queued messages NOW: interrupt the current run, wait for it to
+  // settle, then re-submit the cleared texts as a fresh prompt. Images cannot
+  // be recovered from the queue (pi queues text only).
+  const handleForceSendQueue = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    try {
+      const cleared = await sendAgentCommand<{ steering?: string[]; followUp?: string[] }>(sid, { type: "clear_queue" });
+      setQueuedMessages({ steering: [], followUp: [] });
+      const texts = [...(cleared?.steering ?? []), ...(cleared?.followUp ?? [])];
+      if (texts.length === 0) return;
+      // Abort is harmless when idle; when running it interrupts the current turn.
+      await sendAgentCommand(sid, { type: "abort" });
+      const deadline = Date.now() + 15000;
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 300));
+        let st: { isStreaming?: boolean; isPromptRunning?: boolean; isBashRunning?: boolean } | null = null;
+        try {
+          st = await sendAgentCommand<{ isStreaming?: boolean; isPromptRunning?: boolean; isBashRunning?: boolean }>(sid, { type: "get_state" });
+        } catch {
+          // Wrapper may be restarting after abort; keep polling until deadline.
+        }
+        const busy = !!st && !!(st.isStreaming || st.isPromptRunning || st.isBashRunning);
+        if (!busy) break;
+        if (Date.now() > deadline) throw new Error("Timed out waiting for the run to stop");
+      }
+      await handleSend(texts.join("\n\n"));
+    } catch (e) {
+      console.error("Failed to force-send queued messages:", e);
+      addNotice({ type: "error", message: "Failed to force-send queued messages" });
+    }
+  }, [handleSend, addNotice]);
+
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     if (level === "auto") {
       thinkingLevelOverrideRef.current = null;
@@ -2473,7 +2506,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Actions
     handleSend, handleAbort, handleFork, handleForkBranch, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
-    handleRecallQueue,
+    handleRecallQueue, handleForceSendQueue,
     handleBuiltinSlashCommand,
     setNoticePaused: setPausedNoticeId,
     handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages, loadContext,

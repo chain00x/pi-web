@@ -343,6 +343,8 @@ export const enLocale: LocalePlugin = {
     "chat.close": "Close",
     "chat.queued": "Queued · {count}",
     "chat.recall": "Recall to input",
+    "chat.forceSend": "Send now",
+    "chat.forceSendTitle": "Interrupt the current run and send queued messages immediately",
     "chat.recallTitle": "Remove all queued messages and put them back into the input box for editing",
     "chat.retrying": "Retrying ({attempt}/{max})…",
     "chat.loadingCommands": "Loading commands...",

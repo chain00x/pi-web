@@ -343,6 +343,8 @@ export const zhTWLocale: LocalePlugin = {
     "chat.close": "關閉",
     "chat.queued": "已排入佇列 · {count}",
     "chat.recall": "移回輸入框",
+    "chat.forceSend": "立即發送",
+    "chat.forceSendTitle": "打斷當前運行，立即發送排隊的消息",
     "chat.recallTitle": "將所有佇列中的訊息移回輸入框以便編輯",
     "chat.retrying": "正在重試（{attempt}/{max}）…",
     "chat.loadingCommands": "正在載入命令...",
