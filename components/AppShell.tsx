@@ -60,7 +60,7 @@ import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { FileViewerState } from "@/lib/file-viewer-state";
 import type { ToolEntry } from "@/lib/tool-presets";
-import { getSessionFamily } from "@/lib/session-family";
+import { getSessionFamily, pickNeighborSession } from "@/lib/session-family";
 import { getLastSettingsSection, type SettingsSection } from "@/lib/settings-navigation";
 
 type SessionCopyField = "file" | "id" | "projectDir" | "gitBranch" | "gitWorktree";
@@ -1011,6 +1011,13 @@ export function AppShell() {
     setRefreshKey((k) => k + 1);
     if (selectedSession?.id === sessionId) {
       clearTabOpenSession(sessionId);
+      // Select the nearest surviving session in the same project instead of
+      // kicking the user back to a blank new-chat composer.
+      const neighbor = pickNeighborSession(sessionCatalog, sessionId, selectedSession.cwd);
+      if (neighbor) {
+        handleSelectSession(neighbor, false);
+        return;
+      }
       const cwd = selectedSession.cwd;
       const draftId = typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
@@ -1028,7 +1035,7 @@ export function AppShell() {
       setActiveTopPanel(null);
       router.replace(cwd ? `?cwd=${encodeURIComponent(cwd)}` : (typeof window !== "undefined" ? window.location.pathname : "/"), { scroll: false });
     }
-  }, [invalidateWorkspaceRestore, selectedSession, router]);
+  }, [invalidateWorkspaceRestore, selectedSession, router, sessionCatalog, handleSelectSession]);
 
   const handleOpenFile = useCallback((
     filePath: string,

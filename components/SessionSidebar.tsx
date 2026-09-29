@@ -1106,12 +1106,30 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   const sessionFamilies = useMemo(() => listSessionFamilies(filteredSessions), [filteredSessions]);
 
+  // While a row's inline delete confirmation is open, freeze the list order:
+  // the background poll re-sorts rows as sessions change, and a jumping row
+  // would move a different session under the pending confirm click.
+  const [confirmingSessionId, setConfirmingSessionId] = useState<string | null>(null);
+  const frozenFamiliesRef = useRef<ReturnType<typeof listSessionFamilies> | null>(null);
+  const stableFamilies = confirmingSessionId && frozenFamiliesRef.current
+    ? frozenFamiliesRef.current
+    : sessionFamilies;
+  const handleConfirmStateChange = useCallback((sessionKey: string, active: boolean) => {
+    if (active) {
+      frozenFamiliesRef.current = sessionFamilies;
+      setConfirmingSessionId(sessionKey);
+    } else {
+      frozenFamiliesRef.current = null;
+      setConfirmingSessionId((current) => (current === sessionKey ? null : current));
+    }
+  }, [sessionFamilies]);
+
   const virtualIndices = useMemo(() => getSessionListIndices(
-    sessionFamilies.length,
+    stableFamilies.length,
     listScrollTop,
     listViewportH,
-    sessionFamilies.findIndex((family) => family.root.id === focusedSessionId),
-  ), [focusedSessionId, listScrollTop, listViewportH, sessionFamilies]);
+    stableFamilies.findIndex((family) => family.root.id === focusedSessionId),
+  ), [focusedSessionId, listScrollTop, listViewportH, stableFamilies]);
 
   return (
     <div
@@ -1817,20 +1835,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             {error}
           </div>
         )}
-        {!loading && !error && sessionFamilies.length === 0 && (
+        {!loading && !error && stableFamilies.length === 0 && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
             {t("sidebar.noSessions")}
           </div>
         )}
-        {sessionFamilies.length > 0 && (
+        {stableFamilies.length > 0 && (
           <div
             style={{
               position: "relative",
-              height: sessionFamilies.length * SESSION_LIST_ITEM_HEIGHT,
+              height: stableFamilies.length * SESSION_LIST_ITEM_HEIGHT,
             }}
           >
             {virtualIndices.map((index) => {
-              const family = sessionFamilies[index];
+              const family = stableFamilies[index];
               const familySessions = [family.root, ...family.subagents];
               const displaySession = family.latestModified === family.root.modified
                 ? family.root
@@ -1851,10 +1869,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     onClick={() => handleSelectSessionFromList(family.root)}
                     onRenamed={loadSessions}
                     onTogglePinned={handleTogglePinned}
-                    onDeleted={(id) => {
-                      onSessionDeleted?.(id);
-                      loadSessions();
-                    }}
+                    onDeleted={onSessionDeleted}
+                    onConfirmStateChange={(active) => handleConfirmStateChange(family.root.id, active)}
                   />
                 </div>
               );
@@ -2150,6 +2166,7 @@ function SessionItem({
   onRenamed,
   onTogglePinned,
   onDeleted,
+  onConfirmStateChange,
   depth = 0,
   hasChildren = false,
   collapsed = false,
@@ -2163,6 +2180,8 @@ function SessionItem({
   onRenamed?: () => void;
   onTogglePinned?: (session: SessionInfo) => void;
   onDeleted?: (id: string) => void;
+  /** Reports while the inline delete confirmation is open so the list can freeze its order. */
+  onConfirmStateChange?: (active: boolean) => void;
   depth?: number;
   hasChildren?: boolean;
   collapsed?: boolean;
@@ -2220,15 +2239,25 @@ function SessionItem({
 
   const performDelete = useCallback(async () => {
     if (session.transient) return;
-    setConfirmDelete(false);
     setDeleting(true);
+    // Notify the parent BEFORE awaiting the server: deleting the currently
+    // open session can take many seconds (the runtime shuts the agent down
+    // first), and the user must see the neighbor selection immediately, not
+    // after a long dead window with no feedback.
+    onDeleted?.(session.id);
     try {
       await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
-      onDeleted?.(session.id);
+      onRenamed?.();
     } catch {
       setDeleting(false);
+    } finally {
+      // Close the inline confirmation (and unfreeze the list order) only after
+      // the deletion settles — reopening/reshuffling mid-flight would let the
+      // poll-driven re-sort move a different row under the pending click.
+      setConfirmDelete(false);
+      onConfirmStateChange?.(false);
     }
-  }, [session.id, session.transient, onDeleted]);
+  }, [session.id, session.transient, onDeleted, onRenamed, onConfirmStateChange]);
 
   const handleDeleteClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2236,8 +2265,9 @@ function SessionItem({
       void performDelete();
     } else {
       setConfirmDelete(true);
+      onConfirmStateChange?.(true);
     }
-  }, [performDelete]);
+  }, [performDelete, onConfirmStateChange]);
 
   const handleDeleteConfirm = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2247,7 +2277,8 @@ function SessionItem({
   const handleDeleteCancel = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmDelete(false);
-  }, []);
+    onConfirmStateChange?.(false);
+  }, [onConfirmStateChange]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({

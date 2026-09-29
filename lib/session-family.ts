@@ -72,6 +72,36 @@ export function listSessionFamilies(sessions: readonly SessionInfo[]): SessionFa
   );
 }
 
+/**
+ * Pick the nearest surviving session (same project) to select after a delete.
+ *
+ * Orders the deleted session's project peers the same way the sidebar does
+ * (pinned first, then latest modified), finds where the deleted session sat,
+ * and returns the session that takes (or precedes) its slot so deleting the
+ * viewed conversation never kicks the user back to a blank new-chat page.
+ */
+export function pickNeighborSession(
+  sessions: readonly SessionInfo[],
+  deletedId: string,
+  cwd: string | null | undefined,
+): SessionInfo | null {
+  const inProject = (session: SessionInfo) =>
+    session.relation?.kind !== "subagent" && (cwd ? session.cwd === cwd : !session.cwd);
+  const byRecency = (a: SessionInfo, b: SessionInfo) =>
+    ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+    || (b.modified ?? "").localeCompare(a.modified ?? "");
+  const withSelf = sessions.filter(inProject).sort(byRecency);
+  const survivors = withSelf.filter((session) => session.id !== deletedId);
+  if (survivors.length === 0) return null;
+  const index = withSelf.findIndex((session) => session.id === deletedId);
+  // Prefer the next newer session (the row above the deleted one); when the
+  // deleted one was the newest (index 0) or is already absent from the
+  // catalog, fall back to the closest older one. Inserting at the deleted
+  // row's position on the survivor list gives exactly that.
+  const insertAt = index === -1 ? 0 : index;
+  return survivors[Math.max(insertAt - 1, 0)] ?? null;
+}
+
 export function getSessionFamily(
   sessions: readonly SessionInfo[],
   sessionId: string | null | undefined,
