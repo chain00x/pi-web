@@ -101,7 +101,7 @@ function formatMessageBytes(n: number): string {
  * MarkdownBody with an oversized-content guard: huge messages render as a
  * click-to-reveal plain-text <pre> instead of running the markdown pipeline.
  */
-function SafeMarkdownBody({ children, className, ...props }: React.ComponentProps<typeof MarkdownBody>) {
+export function SafeMarkdownBody({ children, className, ...props }: React.ComponentProps<typeof MarkdownBody>) {
   const { t } = useI18n();
   const [showRaw, setShowRaw] = useState(false);
 
@@ -1511,11 +1511,9 @@ function ResultImages({ images, isError }: { images: ImageContent[]; isError: bo
             src={src}
             style={{ maxWidth: "100%" }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <RetryableImage
               src={src}
               alt=""
-              loading="lazy"
               style={{
                 display: "block",
                 maxWidth: "min(100%, 720px)",
@@ -1709,8 +1707,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                   if (!src) return null;
                   return (
                     <ImagePreview key={i} src={src}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <RetryableImage
                         src={src}
                         alt=""
                         style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
@@ -1825,6 +1822,28 @@ function getMessageText(content: CustomMessage["content"] | UserMessage["content
 function getMessageImages(content: CustomMessage["content"] | UserMessage["content"]): ImageContent[] {
   if (typeof content === "string") return [];
   return content.filter((b): b is ImageContent => b.type === "image");
+}
+
+/**
+ * 带自动重试的图片：历史工具结果图由 /api/.../tool-result-image 按需从会话文件解析，
+ * 单次请求可能瞬态 404/5xx（会话文件高频追加窗口），重试即可恢复。
+ */
+function RetryableImage({ src, alt, style }: { src: string; alt: string; style?: React.CSSProperties }) {
+  const [attempt, setAttempt] = useState(0);
+  const url = attempt === 0 || attempt > 3 ? src : `${src}${src.includes("?") ? "&" : "?"}r=${attempt}`;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      key={url}
+      src={url}
+      alt={alt}
+      style={style}
+      loading="lazy"
+      onError={() => {
+        if (attempt <= 3) setAttempt((value) => value + 1);
+      }}
+    />
+  );
 }
 
 function imageSource(img: ImageContent): string {

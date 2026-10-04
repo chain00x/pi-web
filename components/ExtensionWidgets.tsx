@@ -4,6 +4,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { AnsiText } from "@/components/AnsiText";
 import type { ExtensionWidgetItem } from "@/lib/types";
+import {
+  SUBAGENT_ASYNC_WIDGET_KEY,
+} from "@/lib/subweb";
 
 export const DEFAULT_EXPANDED_WIDGET_LINES = 3;
 export const WIDGET_UPDATE_IDLE_MS = 1100;
@@ -33,6 +36,7 @@ export function getUpdatedExtensionWidgetKeys(
 }
 
 function getDefaultExpandedWidgetKey(widgets: ExtensionWidgetItem[]): string | null {
+  // subagent-async 已迁至侧边栏，不再参与默认展开
   return widgets.find((widget) => {
     const lineCount = widget.lines.length;
     return lineCount > 1 && lineCount <= DEFAULT_EXPANDED_WIDGET_LINES;
@@ -46,7 +50,7 @@ export function getNextExpandedWidgetKey(
   return currentKey === requestedKey ? null : requestedKey;
 }
 
-export function ExtensionWidgets({ widgets }: { widgets: ExtensionWidgetItem[] }) {
+export function ExtensionWidgets({ widgets, onOpenSubagents }: { widgets: ExtensionWidgetItem[]; onOpenSubagents?: () => void }) {
   const { t } = useI18n();
   const idPrefix = useId();
   const previousContentsRef = useRef<Map<string, string[]> | null>(null);
@@ -110,6 +114,11 @@ export function ExtensionWidgets({ widgets }: { widgets: ExtensionWidgetItem[] }
   ));
 
   const toggleWidget = (widget: ExtensionWidgetItem) => {
+    // subagent 运行面板已迁至侧边栏：点 pill 直达，不再展开内嵌面板
+    if (widget.key === SUBAGENT_ASYNC_WIDGET_KEY) {
+      onOpenSubagents?.();
+      return;
+    }
     setExpandedWidgetKey((current) => getNextExpandedWidgetKey(current, widget.key));
   };
 

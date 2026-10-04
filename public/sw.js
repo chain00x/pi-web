@@ -9,10 +9,15 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
   "/icons/apple-touch-icon.png",
 ];
-// A reachable port backed by a dead upstream accepts the connection and then
-// never answers: fetch() neither resolves nor rejects, so the navigation hangs
-// forever instead of falling back to offline.html. Bound every network wait.
-const NAVIGATION_TIMEOUT_MS = 8000;
+// A reachable port backed by a saturated connection pool accepts the connection
+// and then never answers: fetch() neither resolves nor rejects, so the
+// navigation hangs forever instead of falling back to offline.html.
+// Chrome caps HTTP/1.1 at 6 connections per host; every open Pi Web tab holds
+// one SSE connection, so the pool can be temporarily exhausted when many tabs
+// are open. Retry once before showing the offline page — the retry usually
+// lands on a freed connection.
+const NAVIGATION_TIMEOUT_MS = 6000;
+const NAVIGATION_RETRY_DELAY_MS = 1200;
 const ASSET_TIMEOUT_MS = 8000;
 
 self.addEventListener("install", (event) => {
@@ -51,10 +56,21 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetchWithTimeout(request, NAVIGATION_TIMEOUT_MS).catch(async () => {
-        const fallback = await caches.match(OFFLINE_URL);
-        return fallback ?? Response.error();
-      }),
+      (async () => {
+        try {
+          return await fetchWithTimeout(request, NAVIGATION_TIMEOUT_MS);
+        } catch {
+          // First attempt timed out (likely a momentarily exhausted connection
+          // pool). Give the pool a moment to release a connection, then retry.
+          await new Promise((resolve) => setTimeout(resolve, NAVIGATION_RETRY_DELAY_MS));
+          try {
+            return await fetchWithTimeout(request, NAVIGATION_TIMEOUT_MS);
+          } catch {
+            const fallback = await caches.match(OFFLINE_URL);
+            return fallback ?? Response.error();
+          }
+        }
+      })(),
     );
     return;
   }

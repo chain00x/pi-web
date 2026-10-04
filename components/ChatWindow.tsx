@@ -14,6 +14,8 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
+import { SubagentSidebar } from "./SubagentSidebar";
+import { parseAsyncSnapshotWidget, SUBAGENT_ASYNC_WIDGET_KEY, classifyRunState, type AsyncSnapshotRunNode } from "@/lib/subweb";
 import { AnsiText } from "./AnsiText";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
@@ -307,6 +309,15 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     sourceEntryId?: string;
   } | null>(null);
   const [quoteInputOpen, setQuoteInputOpen] = useState(false);
+  // subagent 侧边栏（本会话派发的异步 run，Claude Code 风格右侧栏 + 可全屏）；默认关闭，手动从 pill 打开
+  const [subagentPanelOpen, setSubagentPanelOpen] = useState(false);
+  const [subagentPanelFullscreen, setSubagentPanelFullscreen] = useState(false);
+  const subagentRuns = useMemo(() => {
+    const widget = extensionWidgets.find((item) => item.key === SUBAGENT_ASYNC_WIDGET_KEY);
+    if (!widget) return [];
+    return parseAsyncSnapshotWidget(widget.lines)?.runs ?? [];
+  }, [extensionWidgets]);
+
   const [quoteSubmitting, setQuoteSubmitting] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const quotePopoverRef = useRef<HTMLDivElement | null>(null);
@@ -925,8 +936,17 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
 
   return (
     <div
+      style={{
+        display: "flex",
+        width: "100%",
+        height: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+      }}
+    >
+    <div
       className="chat-content relative flex h-full min-w-0 flex-col overflow-hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{ paddingBottom: "env(safe-area-inset-bottom)", flex: "1 1 auto" }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -1370,9 +1390,23 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
           </div>
         )}
         {chatInputElement}
-        <ExtensionStatusBar statuses={extensionStatuses} widgets={extensionWidgets} />
+        <ExtensionStatusBar
+          sessionId={session?.id}
+          statuses={extensionStatuses}
+          widgets={extensionWidgets}
+          onOpenSubagents={() => setSubagentPanelOpen((open) => !open)}
+        />
+        {isEmptyNew && <div className="min-h-0 flex-1" />}
       </div>
-      {isEmptyNew && <div className="min-h-0 flex-1" />}
+    </div>
+      <SubagentSidebar
+        sessionId={session?.id ?? sessionIdRef.current ?? ""}
+        runs={subagentRuns}
+        open={subagentPanelOpen}
+        fullscreen={subagentPanelFullscreen}
+        onOpenChange={setSubagentPanelOpen}
+        onFullscreenChange={setSubagentPanelFullscreen}
+      />
     </div>
   );
 }
