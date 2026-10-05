@@ -66,6 +66,9 @@ export function ExtensionStatusBar({
 
   const statusLine = formatExtensionStatusLine(statuses);
   const plainStatusLine = stripAnsi(statusLine);
+  const hasStatusText = statuses.length > 0 && plainStatusLine.trim().length > 0;
+  // 无 live pill、无有效状态文本、无历史入口时完全不渲染（不占位）
+  if (!pillVisible && !hasStatusText && !hasHistory) return null;
 
   return (
     <div
@@ -96,7 +99,7 @@ export function ExtensionStatusBar({
           </button>
         </div>
       )}
-      {statuses.length > 0 && (
+      {hasStatusText && (
         <div
           role="status"
           className="extension-status-line"

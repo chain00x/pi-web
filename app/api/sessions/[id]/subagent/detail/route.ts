@@ -15,9 +15,9 @@ import {
  */
 
 const TAIL_BYTES = 16 * 1024;
-const TRANSCRIPT_MAX_ITEMS = 80;
-const TRANSCRIPT_MAX_TEXT = 500;
-const TRANSCRIPT_READ_BYTES = 768 * 1024;
+const TRANSCRIPT_MAX_ITEMS = 20000;
+const TRANSCRIPT_MAX_TEXT = 100000; // 与主对话 SafeMarkdownBody 同款上限
+const TRANSCRIPT_READ_BYTES = 12 * 1024 * 1024; // 极端保护：超过则只读尾部窗口
 
 function runRoots(): string[] {
   const out: string[] = [];
@@ -111,6 +111,7 @@ interface TranscriptItem {
   result?: string;
   isError?: boolean;
   callId?: string;
+  mid?: string; // 所属 message id：前端按它把同一轮的 thinking/text/toolCall 合并成一条消息
 }
 
 /** 从工具入参中提炼一个简短的行内摘要（命令/路径/URL 等），用于折叠行展示。 */
@@ -163,20 +164,20 @@ function clip(text: string, max = TRANSCRIPT_MAX_TEXT): string {
 }
 
 /** 读子代理会话 jsonl 尾部，抽取可读对话（主输出 + 可折叠工具调用）。 */
-function transcriptOf(sessionFile: unknown, full = false): { items: TranscriptItem[]; truncated: boolean } {
+function transcriptOf(sessionFile: unknown): { items: TranscriptItem[]; truncated: boolean } {
   if (typeof sessionFile !== "string" || !sessionFile.endsWith(".jsonl") || !existsSync(sessionFile)) {
     return { items: [], truncated: false };
   }
-  // 完整模式：不限读取窗口、放宽截断阈值（由前端按需请求一次，不随轮询刷新）
-  const maxText = full ? 30000 : TRANSCRIPT_MAX_TEXT;
-  const maxResult = full ? 8000 : 300;
-  const maxInput = full ? 65536 : 8192;
-  const maxItems = full ? 20000 : TRANSCRIPT_MAX_ITEMS;
+  // 默认即完整：主对话同款体验；仅超大文件时退化为尾部窗口（极端保护）
+  const maxText = TRANSCRIPT_MAX_TEXT;
+  const maxResult = 20000;
+  const maxInput = 65536;
+  const maxItems = TRANSCRIPT_MAX_ITEMS;
   let raw: string;
   let truncatedStart = false;
   try {
     const buf = readFileSync(sessionFile);
-    if (!full && buf.length > TRANSCRIPT_READ_BYTES) {
+    if (buf.length > TRANSCRIPT_READ_BYTES) {
       raw = buf.subarray(buf.length - TRANSCRIPT_READ_BYTES).toString("utf8");
       truncatedStart = true;
     } else {
@@ -201,6 +202,7 @@ function transcriptOf(sessionFile: unknown, full = false): { items: TranscriptIt
     const message = entry.message as Record<string, unknown> | undefined;
     if (!message) continue;
     const role = String(message.role ?? "?");
+    const mid = typeof entry.id === "string" ? entry.id : undefined;
     if (role === "toolResult") {
       // 工具结果：配对进对应的 toolCall 条目，不独立成行
       const callId = typeof message.toolCallId === "string" ? message.toolCallId : undefined;
@@ -216,7 +218,7 @@ function transcriptOf(sessionFile: unknown, full = false): { items: TranscriptIt
         target.result = clip(resultText, maxResult);
         if (isError) target.isError = true;
       } else {
-        items.push({ role, kind: "tool", name: toolName, text: "", result: clip(resultText, maxResult), isError });
+        items.push({ role, kind: "tool", name: toolName, text: "", result: clip(resultText, maxResult), isError, mid });
       }
       continue;
     }
@@ -227,7 +229,10 @@ function transcriptOf(sessionFile: unknown, full = false): { items: TranscriptIt
     for (const block of blocks) {
       const kind = String(block.type ?? "");
       if (kind === "text" && typeof block.text === "string" && block.text.trim()) {
-        items.push({ role, kind: "text", text: clip(block.text, maxText) });
+        items.push({ role, kind: "text", text: clip(block.text, maxText), mid });
+      } else if (kind === "thinking" && typeof block.thinking === "string" && block.thinking.trim()) {
+        // 思考块：与主对话一致，折叠展示
+        items.push({ role, kind: "thinking", text: clip(block.thinking, maxText), mid });
       } else if (kind === "toolCall") {
         const input = block.arguments ?? block.input ?? block.partialInput;
         const callId = typeof block.id === "string" ? block.id : undefined;
@@ -239,17 +244,17 @@ function transcriptOf(sessionFile: unknown, full = false): { items: TranscriptIt
           args: argsPreview(input),
           input: clipSerialized(input, maxInput),
           callId,
+          mid,
         };
         items.push(item);
         if (callId) byCallId.set(callId, item);
       } else if (kind === "image") {
-        items.push({ role, kind: "image", text: "[image]" });
+        items.push({ role, kind: "image", text: "[image]", mid });
       }
-      // thinking: 不展示
+      // 其它块型（如 redacted_thinking）不展示
     }
   }
-  const overLimit = !full && items.length > TRANSCRIPT_MAX_ITEMS;
-  return { items: items.slice(-maxItems), truncated: truncatedStart || overLimit };
+  return { items: items.slice(-maxItems), truncated: truncatedStart };
 }
 
 function tailOfFiles(dir: string): { tail: string; truncated: boolean } {
@@ -310,8 +315,7 @@ export async function GET(
   const steps = Array.isArray(status.steps) ? (status.steps as Array<Record<string, unknown>>) : [];
   const label = typeof steps[0]?.sessionName === "string" ? (steps[0].sessionName as string) : runId.slice(0, 8);
   const { tail, truncated } = tailOfFiles(dir);
-  const full = url.searchParams.get("full") === "1";
-  const { items: transcript, truncated: transcriptTruncated } = transcriptOf(resolveSessionFile(status), full);
+  const { items: transcript, truncated: transcriptTruncated } = transcriptOf(resolveSessionFile(status));
 
   return NextResponse.json({
     runId,

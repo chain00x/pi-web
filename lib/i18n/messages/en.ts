@@ -354,7 +354,6 @@ export const enLocale: LocalePlugin = {
     "chat.subagentOutputTruncated": "Only the last 16KB of output is shown",
     "chat.subagentTranscript": "Conversation",
     "chat.subagentTranscriptEmpty": "Conversation will appear here",
-    "chat.subagentTranscriptFull": "Load full conversation",
     "chat.subagentSteer": "Steer",
     "chat.subagentStop": "Stop",
     "chat.subagentResume": "Resume",

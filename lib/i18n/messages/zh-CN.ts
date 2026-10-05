@@ -354,7 +354,6 @@ export const zhCNLocale: LocalePlugin = {
     "chat.subagentOutputTruncated": "仅显示最后 16KB 输出",
     "chat.subagentTranscript": "对话",
     "chat.subagentTranscriptEmpty": "对话将在此出现",
-    "chat.subagentTranscriptFull": "加载完整对话",
     "chat.subagentSteer": "插话",
     "chat.subagentStop": "停止",
     "chat.subagentResume": "恢复并插话",

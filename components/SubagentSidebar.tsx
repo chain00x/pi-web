@@ -35,7 +35,6 @@ interface DetailData {
   tail?: string;
   truncated?: boolean;
   transcript?: TranscriptItem[];
-  transcriptTruncated?: boolean;
 }
 
 interface TranscriptItem {
@@ -48,6 +47,7 @@ interface TranscriptItem {
   result?: string;
   isError?: boolean;
   callId?: string;
+  mid?: string;
 }
 
 /** 把扁平 transcript items 重组为主对话同款的消息序列 + 工具结果配对表。 */
@@ -57,22 +57,31 @@ function buildTranscriptMessages(items: TranscriptItem[]): {
 } {
   const messages: AgentMessage[] = [];
   const toolResults = new Map<string, ToolResultMessage>();
+  // 与主对话一致：同一轮（同 messageId）的 thinking/text/toolCall 合并为一条 assistant 消息
+  let group: { role: string; mid?: string; content: AssistantMessage["content"] } | null = null;
+  const flush = () => {
+    if (!group) return;
+    if (group.content.length > 0) {
+      messages.push({ role: "assistant", model: "", provider: "", content: group.content });
+    }
+    group = null;
+  };
+  const belongs = (item: TranscriptItem) =>
+    group !== null && group.role === item.role && (group.mid ?? "?") === (item.mid ?? "?");
   for (const item of items) {
     if (item.kind === "tool") {
+      if (!belongs(item)) flush();
       const toolCallId = item.callId ?? `orphan-${messages.length}-${item.name ?? "tool"}`;
-      messages.push({
-        role: "assistant",
-        model: "",
-        provider: "",
-        content: [{
-          type: "toolCall",
-          toolCallId,
-          toolName: item.name || "tool",
-          input: typeof item.input === "object" && item.input !== null
-            ? item.input as Record<string, unknown>
-            : {},
-        }],
-      });
+      const callBlock = {
+        type: "toolCall" as const,
+        toolCallId,
+        toolName: item.name || "tool",
+        input: typeof item.input === "object" && item.input !== null
+          ? item.input as Record<string, unknown>
+          : {},
+      };
+      if (group) group.content.push(callBlock);
+      else group = { role: item.role, mid: item.mid, content: [callBlock] };
       if (item.result !== undefined) {
         toolResults.set(toolCallId, {
           role: "toolResult",
@@ -85,25 +94,31 @@ function buildTranscriptMessages(items: TranscriptItem[]): {
       continue;
     }
     if (item.kind === "image") {
+      flush();
       messages.push({ role: "user", content: item.text || "[image]" });
       continue;
     }
+    if (item.kind === "thinking") {
+      if (!belongs(item)) flush();
+      const thinkBlock = { type: "thinking" as const, thinking: item.text };
+      if (group) group.content.push(thinkBlock);
+      else group = { role: item.role, mid: item.mid, content: [thinkBlock] };
+      continue;
+    }
     if (item.role === "user") {
+      flush();
       const msg: UserMessage = { role: "user", content: item.text };
       messages.push(msg);
     } else {
-      const msg: AssistantMessage = {
-        role: "assistant",
-        model: "",
-        provider: "",
-        content: [{ type: "text", text: item.text }],
-      };
-      messages.push(msg);
+      if (!belongs(item)) flush();
+      const textBlock = { type: "text" as const, text: item.text };
+      if (group) group.content.push(textBlock);
+      else group = { role: item.role, mid: item.mid, content: [textBlock] };
     }
   }
+  flush();
   return { messages, toolResults };
 }
-
 interface HistoryRun {
   runId: string;
   label: string;
@@ -220,8 +235,6 @@ export function SubagentSidebar({
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  // 「完整对话」模式：不限窗口/条数拉全量 transcript；启用时暂停轮询（快照一次）
-  const [fullTx, setFullTx] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [receipt, setReceipt] = useState<{ ok: boolean; text: string } | null>(null);
@@ -253,15 +266,14 @@ export function SubagentSidebar({
   // 列表项显示：剥掉 "agent: " 前缀，任务正文更有信息量
   const displayLabel = (label: string): string => label.replace(/^[A-Za-z][\w-]{0,31}:\s*/, "");
 
-  const fetchDetail = useCallback(async (runId: string, full = false) => {
+  const fetchDetail = useCallback(async (runId: string) => {
     if (!RUN_ID_RE.test(runId)) {
       setDetailError(null);
       setDetailLoading(false);
       return;
     }
     try {
-      const suffix = full ? "&full=1" : "";
-      const res = await fetchWithTimeout(`/api/sessions/${encodeURIComponent(sessionId)}/subagent/detail?run=${encodeURIComponent(runId)}${suffix}`, { cache: "no-store" });
+      const res = await fetchWithTimeout(`/api/sessions/${encodeURIComponent(sessionId)}/subagent/detail?run=${encodeURIComponent(runId)}`, { cache: "no-store" });
       if (!res.ok) {
         setDetailError(`HTTP ${res.status}`);
         return;
@@ -280,21 +292,13 @@ export function SubagentSidebar({
     if (!open || !selectedId) return;
     prevPosRef.current = null;
     setDetailLoading(true);
-    void fetchDetail(selectedId, fullTx);
-    if (fullTx) {
-      return;
-    }
+    void fetchDetail(selectedId);
     pollRef.current = setInterval(() => void fetchDetail(selectedId), 2500);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
     };
-  }, [open, selectedId, fetchDetail, fullTx]);
-
-  // 切换 run 时退出完整模式
-  useEffect(() => {
-    setFullTx(false);
-  }, [selectedId]);
+  }, [open, selectedId, fetchDetail]);
 
   // 输出区跟随滚动到底部
   useEffect(() => {
@@ -467,17 +471,6 @@ export function SubagentSidebar({
           <div className="subagent-tx" ref={transcriptRef} aria-label={t("chat.subagentTranscript")}>
             <div className="subagent-tx-title">
               {t("chat.subagentTranscript")}
-              {detail.transcriptTruncated && !fullTx && (
-                <button
-                  type="button"
-                  className="subagent-tx-full-btn"
-                  disabled={detailLoading}
-                  title={t("chat.subagentTranscriptFull")}
-                  onClick={() => { setFullTx(true); if (selectedId) void fetchDetail(selectedId, true); }}
-                >
-                  {t("chat.subagentTranscriptFull")}
-                </button>
-              )}
             </div>
             {transcriptView.messages.map((message, index) => (
               <MessageView
