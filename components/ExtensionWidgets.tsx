@@ -5,7 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { AnsiText } from "@/components/AnsiText";
 import type { ExtensionWidgetItem } from "@/lib/types";
 import {
-  SUBAGENT_ASYNC_WIDGET_KEY,
+  isSubagentWidgetKey,
 } from "@/lib/subweb";
 
 export const DEFAULT_EXPANDED_WIDGET_LINES = 3;
@@ -115,7 +115,7 @@ export function ExtensionWidgets({ widgets, onOpenSubagents }: { widgets: Extens
 
   const toggleWidget = (widget: ExtensionWidgetItem) => {
     // subagent 运行面板已迁至侧边栏：点 pill 直达，不再展开内嵌面板
-    if (widget.key === SUBAGENT_ASYNC_WIDGET_KEY) {
+    if (isSubagentWidgetKey(widget.key)) {
       onOpenSubagents?.();
       return;
     }

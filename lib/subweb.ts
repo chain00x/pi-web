@@ -4,6 +4,13 @@
  */
 export const ASYNC_SNAPSHOT_PREFIX = "PI_SUBAGENT_ASYNC_JSON:";
 export const SUBAGENT_ASYNC_WIDGET_KEY = "subagent-async";
+/** 新版 pi-subagents 的常驻 fleet 状态 widget（TUI 风格的「N active agent」一览）。 */
+export const SUBAGENT_FLEET_WIDGET_KEY = "subagent-fleet-status";
+
+/** 两个 widget 都代表「本会话有 subagent」：都能开侧边栏。 */
+export function isSubagentWidgetKey(key: string): boolean {
+  return key === SUBAGENT_ASYNC_WIDGET_KEY || key === SUBAGENT_FLEET_WIDGET_KEY;
+}
 
 /** activity 可能是字符串，也可能是 projection 的结构化对象（activityFor 输出），宽松可选字段。 */
 export interface AsyncSnapshotActivity {

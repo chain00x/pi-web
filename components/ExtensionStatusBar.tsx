@@ -4,6 +4,7 @@ import { stripAnsi } from "@/lib/ansi";
 import type { ExtensionStatusItem, ExtensionWidgetItem } from "@/lib/types";
 import { AnsiText } from "./AnsiText";
 import { ExtensionWidgets } from "./ExtensionWidgets";
+import { SUBAGENT_ASYNC_WIDGET_KEY, isSubagentWidgetKey } from "@/lib/subweb";
 import { useI18n } from "@/hooks/useI18n";
 import { useEffect, useState } from "react";
 
@@ -45,8 +46,8 @@ export function ExtensionStatusBar({
   sessionId?: string;
 }) {
   const { t } = useI18n();
-  // 没有 live pill 时，仅当本会话存在历史 run 才显示常驻入口；全新会话不显示任何按钮
-  const pillVisible = widgets.some((widget) => widget.key === "subagent-async");
+  // 有 subagent 类 widget（async 快照或新版 fleet 状态）就显示常驻入口；否则只在有历史 run 时显示
+  const pillVisible = widgets.some((widget) => isSubagentWidgetKey(widget.key));
   const [hasHistory, setHasHistory] = useState(false);
   useEffect(() => {
     setHasHistory(false);
@@ -75,7 +76,7 @@ export function ExtensionStatusBar({
       className={`extension-status-shelf${widgets.length > 0 ? " has-widgets" : ""}${statuses.length > 0 ? " has-status" : ""}`}
     >
       {widgets.length > 0 && <ExtensionWidgets widgets={widgets} onOpenSubagents={onOpenSubagents} />}
-      {onOpenSubagents && widgets.every((widget) => widget.key !== "subagent-async") && hasHistory && (
+      {onOpenSubagents && widgets.every((widget) => widget.key !== SUBAGENT_ASYNC_WIDGET_KEY) && hasHistory && (
         <div className="extension-widget-triggers subagent-entry" aria-label={t("chat.extensionWidgets")}>
           <button
             type="button"
