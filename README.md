@@ -24,6 +24,7 @@ This fork carries a few changes on top of upstream:
 - **"New session" button on assistant replies — works even mid-run.** Assistant messages now have a hover fork button that forks via `fork_branch` (a non-destructive snapshot fork: the new session ends at the clicked reply, the source session keeps running untouched). The server-side "cannot fork while running" guard on `fork_branch` was removed. The original fork on user messages (which replaces the current session) remains idle-only, as upstream.
 - **Session pin-to-top.** Hover a conversation in the sidebar and use the pin button; pinned sessions sort above all others (recency within the pinned group) and show a small pin glyph. Pins are stored server-side in `~/.pi/agent/session-pins.json`, so they persist across browsers. UI strings in English / 简体中文 / 繁體中文.
 - **Send queued messages now (立即发送).** The queued-messages bar gets a "Send now" button: it interrupts the current run, waits for the agent to settle, and resubmits all queued texts as one fresh prompt (queued images cannot be recovered — pi queues text only).
+- **No upstream update checks.** A fork never updates itself, so the update check is gone: `/api/app-update` no longer queries the npm registry (it always answers `updateAvailable: false`, `releaseUrl: ""`), and the new-session screen no longer renders the "Pi Web vX is available" link. No request to the registry, no nudge toward upstream releases.
 
 All checks pass: `tsc --noEmit`, `eslint`, 1307 unit tests.
 
