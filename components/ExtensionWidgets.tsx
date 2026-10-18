@@ -38,7 +38,8 @@ export function getUpdatedExtensionWidgetKeys(
 function getDefaultExpandedWidgetKey(widgets: ExtensionWidgetItem[]): string | null {
   // subagent-async 已迁至侧边栏，不再参与默认展开
   return widgets.find((widget) => {
-    if (widget.key.startsWith("file:")) return false;
+    // `file:` = 点击开文件；`manual:` = 只有用户点了才展开（看板这种面板不自动弹）
+    if (widget.key.startsWith("file:") || widget.key.startsWith("manual:")) return false;
     const lineCount = widget.lines.length;
     return lineCount > 1 && lineCount <= DEFAULT_EXPANDED_WIDGET_LINES;
   })?.key ?? null;
@@ -84,6 +85,11 @@ export function markFileChipSeen(path: string): void {
   } catch {
     // 静默：只是水位记录
   }
+}
+
+/** widget key 的显示名（`manual:` 前缀只是「不自动展开」标记，不上屏） */
+export function widgetLabel(key: string): string {
+  return key.startsWith("manual:") ? key.slice(7) : key;
 }
 
 export function ExtensionWidgets({ widgets, onOpenSubagents, onOpenFile, onToggleFile }: { widgets: ExtensionWidgetItem[]; onOpenSubagents?: () => void; onOpenFile?: (filePath: string) => void; onToggleFile?: (filePath: string) => void }) {
@@ -249,7 +255,7 @@ export function ExtensionWidgets({ widgets, onOpenSubagents, onOpenFile, onToggl
                   />
                 </svg>
               </span>
-              <span className="extension-widget-key">{widget.key}</span>
+              <span className="extension-widget-key">{widgetLabel(widget.key)}</span>
             </>
           );
 
