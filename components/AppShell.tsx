@@ -1064,6 +1064,7 @@ export function AppShell() {
     handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null, page });
   }, [handleOpenFile, selectedSession?.id]);
 
+
   const handleOpenTerminal = useCallback((cwd: string) => {
     const existing = terminalTabs.find((tab) => tab.cwd === cwd);
     const tab = existing ?? newTerminalTab(cwd);
@@ -1097,6 +1098,16 @@ export function AppShell() {
       return remaining.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? null;
     });
   }, [fileTabs, terminalTabs]);
+
+  /** 已打开就关闭、没打开就打开（底部文件 chip 用） */
+  const handleToggleFile = useCallback((filePath: string) => {
+    const tabId = `file:${filePath}`;
+    if (fileTabs.some((tab) => tab.id === tabId)) {
+      handleCloseFileTab(tabId);
+      return;
+    }
+    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
+  }, [fileTabs, handleCloseFileTab, handleOpenFile, selectedSession?.id]);
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -2338,6 +2349,7 @@ export function AppShell() {
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
+              onToggleFile={handleToggleFile}
               onOpenSession={handleOpenSession}
               onAskInNewChat={handleAskInNewChat}
               quoteSelectionEnabled={quoteSelectionEnabled}

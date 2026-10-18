@@ -39,12 +39,14 @@ export function ExtensionStatusBar({
   widgets = [],
   onOpenSubagents,
   onOpenFile,
+  onToggleFile,
   sessionId,
 }: {
   statuses: ExtensionStatusItem[];
   widgets?: ExtensionWidgetItem[];
   onOpenSubagents?: () => void;
   onOpenFile?: (filePath: string) => void;
+  onToggleFile?: (filePath: string) => void;
   sessionId?: string;
 }) {
   const { t } = useI18n();
@@ -79,7 +81,7 @@ export function ExtensionStatusBar({
     <div
       className={`extension-status-shelf${visibleWidgets.length > 0 ? " has-widgets" : ""}${statuses.length > 0 ? " has-status" : ""}`}
     >
-      {visibleWidgets.length > 0 && <ExtensionWidgets widgets={visibleWidgets} onOpenSubagents={onOpenSubagents} onOpenFile={onOpenFile} />}
+      {visibleWidgets.length > 0 && <ExtensionWidgets widgets={visibleWidgets} onOpenSubagents={onOpenSubagents} onOpenFile={onOpenFile} onToggleFile={onToggleFile} />}
       {onOpenSubagents && (pillVisible || hasHistory) && (
         <div className="extension-widget-triggers subagent-entry" aria-label="subagent">
           <button

@@ -86,7 +86,7 @@ export function markFileChipSeen(path: string): void {
   }
 }
 
-export function ExtensionWidgets({ widgets, onOpenSubagents, onOpenFile }: { widgets: ExtensionWidgetItem[]; onOpenSubagents?: () => void; onOpenFile?: (filePath: string) => void }) {
+export function ExtensionWidgets({ widgets, onOpenSubagents, onOpenFile, onToggleFile }: { widgets: ExtensionWidgetItem[]; onOpenSubagents?: () => void; onOpenFile?: (filePath: string) => void; onToggleFile?: (filePath: string) => void }) {
   const { t } = useI18n();
   const idPrefix = useId();
   const previousContentsRef = useRef<Map<string, string[]> | null>(null);
@@ -196,7 +196,9 @@ export function ExtensionWidgets({ widgets, onOpenSubagents, onOpenFile }: { wid
                 title={`${fileChip.path}${fileChip.unread > 0 ? `  ·  ${fileChip.unread} 条未读` : ""}`}
                 onClick={() => {
                   markFileChipSeen(fileChip.path);
-                  onOpenFile?.(fileChip.path);
+                  // 已打开就关闭，没打开就打开
+                  if (onToggleFile) onToggleFile(fileChip.path);
+                  else onOpenFile?.(fileChip.path);
                 }}
               >
                 <span className="extension-file-chip-icon" aria-hidden="true">
