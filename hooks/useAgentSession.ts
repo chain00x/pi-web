@@ -354,6 +354,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [extensionStatuses, setExtensionStatuses] = useState<ExtensionStatusItem[]>([]);
   const [extensionWidgets, setExtensionWidgets] = useState<ExtensionWidgetItem[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
+  const lastExtensionSessionRef = useRef<string | null>(null);
+
+  // 切到另一个会话时先清空扩展状态，等该会话自己的 get_state/事件水合（否则会把上一个
+  // 会话的看板 / 阶段串过来）
+  useEffect(() => {
+    const sid = session?.id ?? null;
+    if (sid === lastExtensionSessionRef.current) return;
+    lastExtensionSessionRef.current = sid;
+    if (!sid) return;
+    setExtensionStatuses([]);
+    setExtensionWidgets([]);
+  }, [session?.id]);
 
   const eventConnectionRef = useRef<AgentEventConnection | null>(null);
   const eventStreamGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -793,6 +805,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       };
       const realId = result.sessionId;
       sessionIdRef.current = realId;
+      // 新会话：扩展在 session_start 时就发了 setStatus/setWidget，但客户端此刻还没订阅
+      // 事件流，首帧会丢 → 主动拉一次 get_state 水合，避免「新对话要刷新才显示」
+      void sendAgentCommand<AgentStateResponse>(realId, { type: "get_state" })
+        .then((state) => {
+          if (!state || sessionIdRef.current !== realId) return;
+          if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
+          if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
+        })
+        .catch(() => {});
       if (result.model && newSessionModelOverrideRef.current === selectedModel) {
         setPendingModel(result.model);
         if (!selectedModel) setNewSessionDefaultModel(result.model);

@@ -2437,3 +2437,126 @@ span.token.table {
     box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
   }
 }
+
+/* ── vuln-hunt 看板：底部状态条 + 文件 chip（pi-web 补丁） ───────────── */
+.extension-status-shelf {
+  min-height: 40px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-panel) 55%, transparent), var(--bg-panel));
+}
+
+.extension-status-shelf .extension-widget-triggers,
+.extension-status-shelf .extension-widget-trigger {
+  height: 40px;
+}
+
+.extension-status-shelf .extension-status-line {
+  min-height: 40px;
+  padding: 11px 14px;
+}
+
+.extension-status-shelf .extension-status-text {
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+/* 文件 chip：点一下直接打开右侧 tab；有未读时红点脉冲 */
+.extension-file-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
+  height: 40px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 0;
+  border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.extension-file-chip:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.extension-file-chip.is-updating .extension-file-chip-icon {
+  animation: extensionFileChipPulse 900ms ease-out;
+}
+
+.extension-file-chip-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.extension-file-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.extension-file-chip-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  animation: extensionFileChipBadge 1.8s ease-in-out infinite;
+}
+
+@keyframes extensionFileChipBadge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); }
+}
+
+@keyframes extensionFileChipPulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+
+/* 底部条：阶段靠右 + 看板面板一次看全（vuln-hunt 补丁 v2） */
+.extension-status-shelf .extension-status-line {
+  justify-content: flex-end;
+}
+
+.extension-status-shelf .extension-status-text {
+  flex: 0 1 auto;
+  text-align: right;
+}
+
+.extension-widget-panels {
+  max-height: min(360px, 46dvh);
+}
+
+.extension-widget-panel-heading {
+  display: none;
+}
+
+.extension-widget-panel .extension-widget-content {
+  padding: 10px 14px 12px;
+}
+
+/* 看板内容排版（vuln-hunt 补丁 v3） */
+.extension-widget-panel .extension-widget-content {
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.extension-widget-panel .extension-status-shelf {
+  background: transparent;
+}

@@ -38,6 +38,7 @@ export function getUpdatedExtensionWidgetKeys(
 function getDefaultExpandedWidgetKey(widgets: ExtensionWidgetItem[]): string | null {
   // subagent-async 已迁至侧边栏，不再参与默认展开
   return widgets.find((widget) => {
+    if (widget.key.startsWith("file:")) return false;
     const lineCount = widget.lines.length;
     return lineCount > 1 && lineCount <= DEFAULT_EXPANDED_WIDGET_LINES;
   })?.key ?? null;
@@ -50,7 +51,42 @@ export function getNextExpandedWidgetKey(
   return currentKey === requestedKey ? null : requestedKey;
 }
 
-export function ExtensionWidgets({ widgets, onOpenSubagents }: { widgets: ExtensionWidgetItem[]; onOpenSubagents?: () => void }) {
+/**
+ * 「文件 chip」约定（vuln-hunt 等扩展使用）：
+ *   key    = `file:<绝对路径>`        ← 稳定标识，计数变化不改 key（避免 chip 顺序抖动）
+ *   lines  = [显示文本, "unread:<n>", ...]
+ * 点击 = 在右侧面板打开该文件（onOpenFile），并上报「已读」水位。
+ */
+export interface FileChipSpec {
+  path: string;
+  label: string;
+  unread: number;
+}
+
+export function parseFileChip(widget: { key: string; lines: string[] }): FileChipSpec | null {
+  if (!widget.key.startsWith("file:")) return null;
+  const path = widget.key.slice(5).trim();
+  if (!path.startsWith("/")) return null;
+  const label = (widget.lines[0] ?? "").replace(/\x1b\[[0-9;]*m/g, "").trim()
+    || path.split("/").pop()
+    || path;
+  const unread = Number.parseInt((widget.lines[1] ?? "").replace(/[^0-9]/g, ""), 10);
+  return { path, label, unread: Number.isFinite(unread) && unread > 0 ? unread : 0 };
+}
+
+export function markFileChipSeen(path: string): void {
+  try {
+    void fetch("/api/vuln-hunt/seen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    }).catch(() => {});
+  } catch {
+    // 静默：只是水位记录
+  }
+}
+
+export function ExtensionWidgets({ widgets, onOpenSubagents, onOpenFile }: { widgets: ExtensionWidgetItem[]; onOpenSubagents?: () => void; onOpenFile?: (filePath: string) => void }) {
   const { t } = useI18n();
   const idPrefix = useId();
   const previousContentsRef = useRef<Map<string, string[]> | null>(null);
@@ -149,6 +185,35 @@ export function ExtensionWidgets({ widgets, onOpenSubagents }: { widgets: Extens
       )}
       <div className="extension-widget-triggers" aria-label={t("chat.extensionWidgets")}>
         {widgets.map((widget, index) => {
+          const fileChip = parseFileChip(widget);
+          if (fileChip) {
+            const updatingFile = updatingWidgetKeys.has(widget.key);
+            return (
+              <button
+                key={widget.key}
+                type="button"
+                className={`extension-file-chip${fileChip.unread > 0 ? " has-unread" : ""}${updatingFile ? " is-updating" : ""}`}
+                title={`${fileChip.path}${fileChip.unread > 0 ? `  ·  ${fileChip.unread} 条未读` : ""}`}
+                onClick={() => {
+                  markFileChipSeen(fileChip.path);
+                  onOpenFile?.(fileChip.path);
+                }}
+              >
+                <span className="extension-file-chip-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="12" height="12" focusable="false">
+                    <path
+                      fill="currentColor"
+                      d="M4 1.5h5L13 5.5v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-12a1 1 0 0 1 1-1Zm4.5 1.7V6h2.8L8.5 3.2Z"
+                    />
+                  </svg>
+                </span>
+                <span className="extension-file-chip-label">{fileChip.label}</span>
+                {fileChip.unread > 0 && (
+                  <span className="extension-file-chip-badge">{fileChip.unread}</span>
+                )}
+              </button>
+            );
+          }
           const expandable = widget.lines.length > 0;
           const expanded = expandable && widget.key === expandedWidget?.key;
           const updating = updatingWidgetKeys.has(widget.key);

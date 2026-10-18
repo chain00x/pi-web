@@ -4,7 +4,7 @@ import { stripAnsi } from "@/lib/ansi";
 import type { ExtensionStatusItem, ExtensionWidgetItem } from "@/lib/types";
 import { AnsiText } from "./AnsiText";
 import { ExtensionWidgets } from "./ExtensionWidgets";
-import { SUBAGENT_ASYNC_WIDGET_KEY, isSubagentWidgetKey } from "@/lib/subweb";
+import { isSubagentWidgetKey } from "@/lib/subweb";
 import { useI18n } from "@/hooks/useI18n";
 import { useEffect, useState } from "react";
 
@@ -38,16 +38,20 @@ export function ExtensionStatusBar({
   statuses,
   widgets = [],
   onOpenSubagents,
+  onOpenFile,
   sessionId,
 }: {
   statuses: ExtensionStatusItem[];
   widgets?: ExtensionWidgetItem[];
   onOpenSubagents?: () => void;
+  onOpenFile?: (filePath: string) => void;
   sessionId?: string;
 }) {
   const { t } = useI18n();
   // 有 subagent 类 widget（async 快照或新版 fleet 状态）就显示常驻入口；否则只在有历史 run 时显示
   const pillVisible = widgets.some((widget) => isSubagentWidgetKey(widget.key));
+  // subagent 的 widget 不再逐个渲染成 chip（会显示两个/不全），统一收成一个「subagent」按钮
+  const visibleWidgets = widgets.filter((widget) => !isSubagentWidgetKey(widget.key));
   const [hasHistory, setHasHistory] = useState(false);
   useEffect(() => {
     setHasHistory(false);
@@ -69,34 +73,22 @@ export function ExtensionStatusBar({
   const plainStatusLine = stripAnsi(statusLine);
   const hasStatusText = statuses.length > 0 && plainStatusLine.trim().length > 0;
   // 无 live pill、无有效状态文本、无历史入口时完全不渲染（不占位）
-  if (!pillVisible && !hasStatusText && !hasHistory) return null;
+  if (!pillVisible && !hasStatusText && !hasHistory && visibleWidgets.length === 0) return null;
 
   return (
     <div
-      className={`extension-status-shelf${widgets.length > 0 ? " has-widgets" : ""}${statuses.length > 0 ? " has-status" : ""}`}
+      className={`extension-status-shelf${visibleWidgets.length > 0 ? " has-widgets" : ""}${statuses.length > 0 ? " has-status" : ""}`}
     >
-      {widgets.length > 0 && <ExtensionWidgets widgets={widgets} onOpenSubagents={onOpenSubagents} />}
-      {onOpenSubagents && widgets.every((widget) => widget.key !== SUBAGENT_ASYNC_WIDGET_KEY) && hasHistory && (
-        <div className="extension-widget-triggers subagent-entry" aria-label={t("chat.extensionWidgets")}>
+      {visibleWidgets.length > 0 && <ExtensionWidgets widgets={visibleWidgets} onOpenSubagents={onOpenSubagents} onOpenFile={onOpenFile} />}
+      {onOpenSubagents && (pillVisible || hasHistory) && (
+        <div className="extension-widget-triggers subagent-entry" aria-label="subagent">
           <button
             type="button"
             className="extension-widget-trigger"
-            title="subagent-async"
+            title="subagent · 点击查看/管理子代理"
             onClick={onOpenSubagents}
           >
-            <span className="extension-widget-placement" aria-hidden="true">
-              <svg
-                className="extension-widget-placement-icon"
-                viewBox="0 0 8 6"
-                width="8"
-                height="6"
-                data-direction="down"
-                focusable="false"
-              >
-                <path d="M0 0h8L4 6z" />
-              </svg>
-            </span>
-            <span className="extension-widget-key">subagent-async</span>
+            <span className="extension-widget-key">subagent</span>
           </button>
         </div>
       )}

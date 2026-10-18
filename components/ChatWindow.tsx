@@ -1327,6 +1327,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
           sessionId={session?.id}
           statuses={extensionStatuses}
           widgets={extensionWidgets}
+          onOpenFile={onOpenFile}
           onOpenSubagents={() => setSubagentPanelOpen((open) => !open)}
         />
         {isEmptyNew && <div className="min-h-0 flex-1" />}
